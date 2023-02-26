@@ -1,0 +1,46 @@
+---
+title: "Intro_to_Clinical_Data_II_Sankalp.R"
+output: html_document
+date: "2023-02-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/analysis_data")
+clinic <- read.csv("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/analysis_data/brca_clinical_data.csv")
+clinical_drug <- GDCprepare_clinic(query = clin_query, clinical.info = "drug")
+clinical_rad <- GDCprepare_clinic(query = clin_query, clinical.info = "radiation")
+# 1. Days to last followup
+# 2. discrete
+# 3. history of neoadjuvant therapy; This looks at whether a patient has received chemotherapy prior to surgical intervention 
+# 4. categorical
+# 5. (1)As age increases, overall survival decreases. (2) As neoadjuvant therapy is used, patient survival increases. (3) As age at diagnosis increases, patients are less likely to have neoadjuvant therapy
+plot(age, days_to_last_followup)
+# I chose this plot because I thought it would be interesting to see if there was a correlation contrary to the idea that as one ages there are likely to be more followups.
+install.packages("survival")
+mySurv <- Surv(clinic$age, clinic$vital_status)
+SecondSurv<- Surv(clinic$gender, clinic$days_since_birth)
+
+
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
