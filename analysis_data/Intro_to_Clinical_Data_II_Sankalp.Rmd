@@ -8,19 +8,69 @@ date: "2023-02-26"
 knitr::opts_chunk$set(echo = TRUE)
 setwd("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/analysis_data")
 clinic <- read.csv("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/analysis_data/brca_clinical_data.csv")
-clinical_drug <- GDCprepare_clinic(query = clin_query, clinical.info = "drug")
-clinical_rad <- GDCprepare_clinic(query = clin_query, clinical.info = "radiation")
-# 1. Days to last followup
-# 2. discrete
-# 3. history of neoadjuvant therapy; This looks at whether a patient has received chemotherapy prior to surgical intervention 
-# 4. categorical
-# 5. (1)As age increases, overall survival decreases. (2) As neoadjuvant therapy is used, patient survival increases. (3) As age at diagnosis increases, patients are less likely to have neoadjuvant therapy
-plot(age, days_to_last_followup)
-# I chose this plot because I thought it would be interesting to see if there was a correlation contrary to the idea that as one ages there are likely to be more followups.
-install.packages("survival")
-mySurv <- Surv(clinic$age, clinic$vital_status)
-SecondSurv<- Surv(clinic$gender, clinic$days_since_birth)
+library(BiocManager)
+library(TCGAbiolinks)
+library(maftools) 
+is.na(clinic$vital_status)
+#clinical_drug <- GDCprepare_clinic(query = clin_query, clinical.info = "drug")
+#clinical_rad <- GDCprepare_clinic(query = clin_query, clinical.info = "radiation")
+# 1. vital_status
+# 2. categorical
 
+# 3 +4. days_to_drug_therapy_start is a discrete variable in clinical_drug that describes days since the drug therapy has started; days_to_radiation_therapy_start is a discrete variable in clinical_rad that describes days since the radiation therapy has started per patient
+# 5. (1)As time since drug therapy increases, time since radiation therapy decreases (2) As radiation is used for longer, patient survival for breast cancer increases. (3) As drug therapy is used longer, patient survival for breast cancer increases
+days_to_drug_therapy_start_na_mask <- na.omit(clinical_drug$days_to_drug_therapy_start)
+days_to_radiation_therapy_start_na_mask<-na.omit(clinical_rad$days_to_radiation_therapy_start)
+length(days_to_drug_therapy_start_na_mask)=length(days_to_radiation_therapy_start_na_mask)
+length(days_to_drug_therapy_start_na_mask)
+length(days_to_radiation_therapy_start_na_mask)
+jpeg('scatter.jpg')
+plot(x=days_to_drug_therapy_start_na_mask,y=days_to_radiation_therapy_start_na_mask)
+dev.off()
+#plot(x=clinical_drug$days_to_drug_therapy_start, y=clinical_rad$days_to_radiation_therapy_start)
+# I chose this plot because I thought it would be interesting to see if there was a relationship between when radiation therapy is used and when drug therapy is used.
+#install.packages("survival")
+#mySurv <- Surv(clinic$age, clinic$vital_status)
+#SecondSurv<- Surv(clinic$gender, clinic$days_since_birth)
+if(!require(survival)){
+  install.packages("survival")
+  
+}
+library(survival)
+if(!require(survminer)){
+  install.packages("survminer")
+}
+library(survminer)
+if (!require(ggplot2)){
+  install.packages("ggplot2")
+  
+}
+library(ggplot2)
+clinical_rad$measure_of_response=ifelse(clinical_rad$measure_of_response=="Complete Response",1, 0)
+measure_of_response_mask<-na.omit(clinical_rad$measure_of_response)
+length(days_to_radiation_therapy_start_na_mask)=length(measure_of_response_mask)
+surv_object_days_rad<- Surv(time=clinical_rad$days_to_radiation_therapy_start, event=clinical_rad$measure_of_response)
+days_rad_fit<-survfit(surv_object_days_rad ~ clinical_rad$days_to_radiation_therapy_start,data =clinical_rad)
+
+survplot_days_rad <-ggsurvplot(days_rad_fit,pval=TRUE,ggtheme=theme(plot.margin=unit(c(1,1,1,1),"cm")), legend="right")
+KM_plot_days_rad<-survplot_days_rad$plot +theme_bw() +theme (axis.title=element_text(size=20),axis.text=element_text(size=16),legend.title=element_text(size=14),legend.text=element_text(size=12))
+
+
+jpeg('KM_plot.jpg')
+KM_plot_days_rad
+dev.off()
+clinical_drug$measure_of_response=ifelse(clinical_drug$measure_of_response=="Complete Response",1, 0)
+length(days_to_drug_therapy_start_na_mask)=length(measure_of_response_mask)
+surv_object_days_drug<- Surv(time=clinical_drug$days_to_drug_therapy_start, event=clinical_drug$measure_of_response)
+days_drug_fit<-survfit(surv_object_days_drug ~ clinical_drug$days_to_drug_therapy_start,data =clinical_drug)
+
+survplot_days_drug <-ggsurvplot(days_drug_fit,pval=TRUE,ggtheme=theme(plot.margin=unit(c(1,1,1,1),"cm")), legend="right")
+KM_plot_days_drug<-survplot_days_drug$plot +theme_bw() +theme (axis.title=element_text(size=20),axis.text=element_text(size=16),legend.title=element_text(size=14),legend.text=element_text(size=12))
+
+
+jpeg('KM_plot2.jpg')
+KM_plot_days_rad
+dev.off()
 
 
 ```

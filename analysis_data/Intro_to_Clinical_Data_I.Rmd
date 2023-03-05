@@ -33,9 +33,10 @@ The loaded files from TCGA are quite large, so we don't want to push them to Git
 ###### (2) Query and retrieve the TCGA breast cancer clinical data 
 
 ```{r}
-clin_query <- GDCquery(project = "TCGA-BRCA", data.category = "Clinical", file.type = "xml")
+#library(TCGAbiolinks)
+#clin_query <- GDCquery(project = "TCGA-BRCA", data.category = "Clinical", file.type = "xml")
   
-clinic <- GDCprepare_clinic(query = clinical_query, clinical.info = "patient")
+#clinic <- GDCprepare_clinic(query = clinical_query, clinical.info = "patient")
 
 ```
 
@@ -67,12 +68,17 @@ Answer the following questions based on the output of those commands:
 nrow(clinic)
 ncol(clinic)
 typeof(clinic$gender)
-clinic[TCGA-4H-AAAK, "age"]
-
+clinic[clinic$bcr_patient_barcode=="TCGA-4H-AAAK", "age_at_initial_pathologic_diagnosis"]
+patient_1<-clinic[clinic$bcr_patient_barcode=="TCGA-3C-AAAU", "days_to_last_followup"]
+patient_1<-patient_1/365
+patient_1<-patient_1 + clinic[clinic$bcr_patient_barcode=="TCGA-3C-AAAU", "age_at_initial_pathologic_diagnosis"]
 #View the column and row names. What two commands should you use?
+```
 
 ```{r Exercise 3.2}
 # write code here
+clinic(colnames)
+clinic(rownames)
 
 ```
 
@@ -80,7 +86,7 @@ View the vital status column. What two notations can be used to view columns?
 
 ```{r Exercise 3.3}
 # write code here
-clinic[,vital_status]
+clinic$vital_status
 ```
 
 ###### (4) Plotting
@@ -93,7 +99,7 @@ For an extra challenge, add a plot title, axes titles, and colors to your plot.
 
 ```{r Exercise 4.1}
 # create plot here
-plot(age, vital_status)
+plot(x=clinic$age, y=clinic$age_at_initial_pathologic_diagnosis)
 ```
 
 Choose two new variables and make a box plot (recall the boxplot() function).
@@ -104,6 +110,7 @@ For an extra challenge, add a plot title, axes titles, and confidence intervals 
 
 ```{r Exercise 4.2}
 # create plot here
+boxplot(formula=clinic$age_at_initial_pathologic_diagnosis~clinic$vital_status)
 ```
 
 
@@ -120,18 +127,18 @@ vital_status_na_mask <- na.omit(clinic$vital_status)
 
 2) Create a mask to select for male patients
 ```{r}
-male_mask <-
+male_mask <-ifelse(clinic$gender=='MALE',TRUE, FALSE)
 ```
 
 3) Create a mask to select for patients under the age of 35 OR over 60 at diagnosis. 
 ```{r}
-under30_over60_mask <-
+under30_over60_mask <-ifelse(clinic$age_at_initial_pathologic_diagnosis<30, TRUE,ifelse(clinic$age_at_initial_pathologic_diagnosis>60,TRUE, FALSE))
 ```
 
 4) Using your under30_over60_mask, create a new dataframe called no_middle_clinic which contains all the clinical data for patients under the age of 30 or over 60 at diagnosis
 
 ```{r}
-no_middle_clinic <- 
+no_middle_clinic <- clinic[under30_over60_mask,]
 ```
 
 
