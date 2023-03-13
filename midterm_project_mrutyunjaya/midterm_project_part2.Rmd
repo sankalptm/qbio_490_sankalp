@@ -1,0 +1,162 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+#library declaration 
+knitr::opts_knit$set(root.dir = normalizePath("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/midterm_project_mrutyunjaya")) 
+# install.packages("survival")
+# install.packages("survminer")
+# install.packages("ggplot2")
+# install.packages("maftools")
+
+# if (!require("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+#   BiocManager::install(version = "3.14")
+# library(BiocManager)
+  
+# if (!require("TCGAbiolinks", quietly = TRUE)) 
+#   BiocManager::install("TCGAbiolinks")
+# library(TCGAbiolinks)
+
+library(maftools)
+library(survival)
+library(survminer)
+library(ggplot2)
+# query for clinical data
+#clinical_query <- GDCquery(project = "TCGA-BRCA", data.category = "Clinical", file.type = "xml")
+#GDCdownload(clinical_query)
+#clinical <- GDCprepare_clinic(query = clinical_query, clinical.info = "patient")
+
+# # prepare (rename) column names of clinical for our maf query
+# colnames(clinical)[colnames(clinical) == "bcr_patient_barcode" ] <- "Tumor_Sample_Barcode"
+# 
+# # prepare clinical.drug and clinical.rad data
+# clinical.drug <- GDCprepare_clinic(query = clinical_query, clinical.info = "drug")
+# clinical.rad <- GDCprepare_clinic(query = clinical_query, clinical.info = "radiation")
+# 
+# # query for MAF data
+# maf_query <- GDCquery(
+#   project = "TCGA-BRCA", 
+#   data.category = "Simple Nucleotide Variation", 
+#   access = "open", 
+#   data.type = "Masked Somatic Mutation", 
+#   workflow.type = "Aliquot Ensemble Somatic Variant Merging and Masking")
+# 
+# GDCdownload(maf_query)
+# 
+# maf <- GDCprepare(maf_query) 
+# 
+# maf_object <- read.maf(maf = maf, 
+#                        clinicalData = clinical,
+#                        isTCGA = TRUE)
+# 
+# rna_query <- GDCquery(project ="TCGA-BRCA",
+#                       data.category = "Transcriptome Profiling",
+#                       data.type = "Gene Expression Quantification",
+#                       workflow.type = "STAR - Counts")
+# #GDCdownload(rna_query)
+# rna_se <- GDCprepare(rna_query)
+rna_clinical <-rna_se@colData
+rna_clinical <- as.data.frame(rna_clinical)
+treatments_mask <- colnames(rna_clinical)%in% c('treatments', 'primary_type','disease_type')
+rna_clinical <- rna_clinical[,!treatments_mask]
+write.csv(rna_clinical, "/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/midterm_project_mrutyunjaya/brca_rna_clincial_data.csv", row.names = TRUE)
+#how does surgical procedure type influence survival for patients with breast cancer with an investigation into mutations in BRCA1 and BRCA2 impact survival in across different surgeries performed
+
+clinical$survival_time <- ifelse(is.na(clinical$days_to_death), clinical$days_to_last_followup, clinical$days_to_death)
+clinical$death_event <- ifelse(clinical$vital_status == "Dead", T, F)
+
+unique(clinical$breast_carcinoma_surgical_procedure_name)
+clinical$breast_carcinoma_surgical_procedure_name<- sub("^$", "No Procedure",clinical$breast_carcinoma_surgical_procedure_name)
+procedure_mask<-ifelse(is.na(clinical$breast_carcinoma_surgical_procedure_name), F, T)
+procedure_cleaned_clinical<-clinical[procedure_mask,]
+png('surgical_procedure_distribution.png')
+ggplot(clinical, aes(x=breast_carcinoma_surgical_procedure_name))+geom_bar()
+dev.off()
+inf_mask<-ifelse(procedure_cleaned_clinical$survival_time=="-Inf",F, T)
+procedure_cleaned_clinical<-procedure_cleaned_clinical[inf_mask,]
+procedure_cleaned_clinical$death_event<-ifelse(procedure_cleaned_clinical$vital_status=="Alive",procedure_cleaned_clinical$death_event<-FALSE, procedure_cleaned_clinical$death_event<-TRUE)
+
+
+
+surv_object_procedure<-Surv(time=procedure_cleaned_clinical$total_time, event =procedure_cleaned_clinical$final_status)
+procedure_fit<-survfit(surv_object_procedure ~procedure_cleaned_clinical$breast_carcinoma_surgical_procedure_name, data=procedure_cleaned_clinical)
+survplot_procedure<-ggsurvplot(procedure_fit, pval=TRUE, ggtheme=theme(plot.margin=unit(c(1,1,1,1),"cm")), legend="right")
+jpeg('surgical_procedure_KM.jpeg')
+KM_plot_days_procedure<-survplot_procedure$plot +theme_bw() +theme (axis.title=element_text(size=20),axis.text=element_text(size=16),legend.title=element_text(size=14),legend.text=element_text(size=12))
+KM_plot_days_procedure
+dev.off()
+
+jpeg('oncoplot_BRCA1_BRCA2.jpeg')
+genes<-c("BRCA1", "BRCA2")
+oncoplot(maf=maf_object,genes=genes)
+dev.off()
+
+procedure_patient_barcodes<-maf_object@clinical.data$Tumor_Sample_Barcode[maf_object@clinical.data$breast_carcinoma_surgical_procedure_name!= "Other"]
+other_procedure_patient_barcodes<-maf_object@clinical.data$Tumor_Sample_Barcode[maf_object@clinical.data$breast_carcinoma_surgical_procedure_name== "Other"]
+procedure_maf<-subsetMaf(maf=maf_object,tsb=procedure_patient_barcodes)
+other_procedure_patient_maf<-subsetMaf(maf=maf_object,tsb=other_procedure_patient_barcodes)
+jpeg('coOncoplot_mastectomy_non_mastectomy.jpeg')
+coOncoplot(m1=procedure_maf,m2=other_procedure_patient_maf, m1Name="Mastectomy Variant Procedure", m2Name="Other Procedure", genes=genes )
+dev.off()
+
+
+jpeg('lollipop_mastectomy_procedure_non_mastectomy_BRCA1.jpeg')
+lollipopPlot2(m1=procedure_maf,m2=other_procedure_patient_maf,m1_name="Mastectomy Variant Procedure", m2_name="Other Procedure", gene = "BRCA1")
+dev.off()
+jpeg('lollipop_mastectomy_procedure_non_mastectomy_BRCA2.jpeg')
+lollipopPlot2(m1=procedure_maf,m2=other_procedure_patient_maf,m1_name="Mastectomy Variant Procedure", m2_name="Other Procedure", gene = "BRCA2")
+dev.off()
+
+BiocManager::install("EnhancedVolcano")
+library(EnhancedVolcano)
+BiocManager::install("DESeq2")
+library(DESeq2)
+rna_counts <- read.csv("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/brca_rna_count_data.csv")
+rna_genes <- read.csv("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/brca_rna_gene_data.csv")
+rna_clinical <- read.csv("/Users/sankalpm/Documents/QBIO_490_sp23/qbio_490_sankalp/brca_rna_clincial_data.csv")
+
+rna_clinical$primary_diagnosis<-factor(rna_clinical$primary_diagnosis)
+na_mask<-!is.na(rna_clinical$primary_diagnosis)
+rna_clinical<-rna_clinical[na_mask,]
+rna_counts<-rna_counts[,na_mask]
+row_sums<-rowSums(rna_counts)
+low_counts_mask<-ifelse(row_sums>=10,T,F)
+rna_counts<-rna_counts[low_counts_mask,]
+rna_genes<-rna_genes[low_counts_mask,]
+
+?DESeqDataSetFromMatrix
+dds <- DESeqDataSetFromMatrix(countData = rna_counts,
+                             colData = rna_clinical,
+                             design = ~primary_diagnosis)
+
+?DESeq
+dds_obj <- DESeq(dds)
+?resultsNames
+resultsNames(dds_obj)
+?results
+results <- results(dds_obj, format = "DataFrame", contrast = c("primary_diagnosis", "Infiltrating duct carcinoma, NOS", "Secretory carcinoma of breast","Lobular carcinoma, NOS","Infiltrating duct and lobular carcinoma","Large cell neuroendocrine carcinoma","Intraductal papillary adenocarcinoma with invasion","Infiltrating duct mixed with other types of carcinoma","Basal cell carcinoma, NOS","Metaplastic carcinoma, NOS","Mucinous adenocarcinoma","Infiltrating lobular mixed with other types of carcinoma","Medullary carcinoma, NOS","Adenoid cystic carcinoma","Papillary carcinoma, NOS","Intraductal micropapillary carcinoma","Carcinoma, NOS","Pleomorphic carcinoma","Phyllodes tumor, malignant","Paget disease and infiltrating duct carcinoma of breast","Tubular adenocarcinoma","Apocrine adenocarcinoma","Cribriform carcinoma, NOS"))
+
+results <- data.frame(rna_genes$gene_name, results@rownames, results@listData$log2FoldChange, results@listData$pvalue, results@listData$padj, -log10(results@listData$padj))
+
+par(mar=c(1,1,1,1))
+EnhancedVolcano(results, 
+                lab = results$`Gene Name`, 
+                x = "Log2 Fold Change", 
+                y = "PAdj")
+
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
